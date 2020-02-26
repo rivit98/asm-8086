@@ -55,7 +55,7 @@ start1:
 
 		xor 	ax, ax
 		mov   	al, byte ptr es:[80h] 	;dlugosc linii argumentow na offsecie 80h
-		cmp		al, 0
+		cmp		al, 0					;sprawdz czy sa jakies argumenty
 		jne		parseArguments
 		mov dx, offset str_emptyArguments
 		call putStr
@@ -66,17 +66,17 @@ start1:
 
 			mov di, offset file_in	;wskaznik na poczatek - odtad bedzie zapis nazwy
 			call parseOneArg		;wczytujemy nazwe pierwszego pliku
-			mov al, 0				;asci zero terminated string
+			mov al, 0				;dodaje zero na koniec stringa
 			mov ds:[di], al
 
-			mov di, offset file_out		;wskaznik na poczatek - odtad bedzie zapis nazwy
+			mov di, offset file_out	;wskaznik na poczatek - odtad bedzie zapis nazwy
 			call parseOneArg
-			mov al, 0				;asci zero terminated string
+			mov al, 0				;dodaje zero na koniec stringa
 			mov ds:[di], al
 
 			mov di, offset key		;wskaznik na poczatek - odtad bedzie zapis klucza
 			call parseLastArg
-			mov al, 0				;asci zero terminated string
+			mov al, 0				;dodaje zero na koniec stringa
 			mov ds:[di], al
 
 		pop di
@@ -126,7 +126,7 @@ start1:
 			
 			mov ds:[di], al
 			inc di
-			skipQuote:
+			skipQuote:			;jesli pomijamy jakis znak to nie zwiekszamy di
 				inc si
 
 			jmp loop_copy
@@ -164,8 +164,6 @@ start1:
 		mov dx, offset str_fileOverwrite
 		call putStr
 
-		mov dx, ax			;deskryptor pliku daje do dx, ze wzgledu na przerwanie
-
 		;DOS 1+ - READ CHARACTER FROM STANDARD INPUT, WITH ECHO
 		mov ah, 01h
 		int 21h
@@ -187,7 +185,6 @@ start1:
 			mov cx, 1
 			int 21h
 
-			mov dx, ax
 			jmp saveFileDescriptor
 
 		createNewFile:
@@ -202,10 +199,8 @@ start1:
 
 			jc fileOpenError
 
-			mov dx, ax
-
 		saveFileDescriptor:
-			mov ds:[file_out_desc], dx ;word ptr
+			mov ds:[file_out_desc], ax
 
 		pop cx
 		pop dx
@@ -223,8 +218,8 @@ start1:
 		loop_loadData:
 			;DOS 2+ - READ - READ FROM FILE OR DEVICE
 			mov dx, offset buffer		;do tego bedzie czytany plik
-			mov cx, 100h
-			mov bx, ds:[file_in_desc]
+			mov cx, 100h				;pojemnosc bufora
+			mov bx, ds:[file_in_desc]	;gdzie bedzie uchwyt do pliku
 			mov ah, 3fh
 			int 21h					;ax przechowuje ile znakow wczytano
 
@@ -259,16 +254,16 @@ start1:
 		push cx
 		
 		;ax przechowuje ile znakow wczytano
-		mov di, offset buffer	;tym bede sie poruszal po buforze
-		mov si, offset key		;tym bede sie poruszal po kluczu
-		mov cx, ax				;licznik ile bajtow pozostalo do wczytania
+		mov di, offset buffer	;bufor iterator
+		mov si, offset key		;klucz iterator
+		mov cx, ax				;licznik - ile bajtow pozostalo do wczytania
 
 		loop_xor:
 			cmp cx, 0
 			je endXoring
 
 			mov al, byte ptr ds:[di]	;chcemy tylko jeden bajt
-			xor al, byte ptr ds:[si]	;wynik bedzie w al
+			xor al, byte ptr ds:[si]	;xor - wynik bedzie w al
 			mov byte ptr ds:[di], al	;aktualizujemy bufor
 
 			dec cx
@@ -279,7 +274,7 @@ start1:
 			cmp al, 0 					;napotykamy zero w kluczu, czyli klucz sie skonczyl, wiec musimy przewinac go na poczatek
 			jne loop_xor
 
-			mov si, offset key
+			mov si, offset key			;przewijamy klucz
 
 			jmp loop_xor
 
@@ -307,7 +302,7 @@ start1:
 		mov dx, offset buffer
 		int 21h
 
-		jc fileSavingError		;jestli CF = blad
+		jc fileSavingError		;jesli CF = blad
 
 		pop cx
 		pop bx
