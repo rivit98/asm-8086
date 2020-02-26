@@ -10,15 +10,16 @@ data1 segment
 	buffer			db	100h	dup(0) 	;256 bajtow
 
 
-	str_emptyArguments		db		"Uzycie: prog.exe plik_we plik_wy klucz_szyfr",10,13,"$"
+	str_emptyArguments		db		"Uzycie: prog.exe plik_we plik_wy ""klucz_szyfr""",10,13,"$"
 	str_argumentsError		db		"Podane argumenty sa niepoprawne!",10,13,"$"
-	str_exitError			db		"Program zakonczyl sie niepowodzeniem :(",10,13,"$"
+	str_exitError			db		"Program zakonczyl sie bledem :(",10,13,"$"
 	str_fileOpenErrorIn		db		"Blad otwierania pliku wejsciowego!",10,13,"$"
 	str_fileOpenErrorOut	db		"Blad otwierania pliku wyjsciowego!",10,13,"$"
 	str_fileCreateNew		db		"Tworze nowy plik wyjsciowy...",10,13,"$"
 	str_fileOverwrite		db		"Czy napewno nadpisac plik wyjsciowy? [T/N]: $"
 	str_fileReadError		db		"Blad podczas czytania pliku wejsciowego",10,13,"$"
 	str_fileWriteError		db		"Blad podczas zapisywania pliku wyjsciowego",10,13,"$"
+	str_success				db		"Plik zaszyfrowany pomyslnie!",10,13,"$"
 
 data1 ends
 
@@ -36,9 +37,11 @@ start1:
 	;wczytanie parametrow
 	call readArgs
 	call openFiles
-	call xor_file
-	;pozamykac pliki
+	call xorFile
+	call closeFiles
 
+	mov dx, offset str_success
+	call putStr
 
 	jmp programExit
 
@@ -156,12 +159,12 @@ start1:
 		mov	ah, 3dh
 		int 21h				;w CF bledy
 
-		jc fileOpenErrorOut	;jump if carry (CF)
+		jc createNewFile	;jump if carry (CF), blad otwarcia - plik nie istnieje
 
 		mov dx, offset str_fileOverwrite
 		call putStr
 
-		mov dx, ax			;deskryptor pliku daje do dx, zeby ponizsze przerwanie nie nadpisalo
+		mov dx, ax			;deskryptor pliku daje do dx, ze wzgledu na przerwanie
 
 		;DOS 1+ - READ CHARACTER FROM STANDARD INPUT, WITH ECHO
 		mov ah, 01h
@@ -170,37 +173,39 @@ start1:
 		call putNewLine
 
 		cmp al, 't'
-		je saveFileDescriptor
+		je truncFile
 
 		cmp al, 'T'
-		je saveFileDescriptor
+		je truncFile
 
-		jmp fileOpenError
+		jmp programExitError
 
-		saveFileDescriptor:
-			mov word ptr ds:[file_out_desc], dx
-			jmp openingFinished
+		truncFile:
+			;DOS 2+ - CREAT - CREATE OR TRUNCATE FILE
+			mov dx, offset file_out
+			mov ah, 3ch
+			mov cx, 1
+			int 21h
 
-		fileOpenErrorOut:
-			mov dx, offset str_fileOpenErrorOut
-			call putStr
+			mov dx, ax
+			jmp saveFileDescriptor
 
+		createNewFile:
 			mov dx, offset str_fileCreateNew
 			call putStr
 
 			;DOS 2+ - CREAT - CREATE OR TRUNCATE FILE
 			mov dx, offset file_out
 			mov ah, 3ch
-			mov cx, 0
+			mov cx, 1
 			int 21h
 
 			jc fileOpenError
 
 			mov dx, ax
-			jmp saveFileDescriptor
 
-		openingFinished:
-			
+		saveFileDescriptor:
+			mov ds:[file_out_desc], dx ;word ptr
 
 		pop cx
 		pop dx
@@ -209,7 +214,7 @@ start1:
 	openFiles endp
 
 	;wczytuje porcjami dane z pliku, xoruje je i zapisuje w nowym pliku
-	xor_file proc
+	xorFile proc
 		push cx
 		push bx
 		push ax
@@ -242,7 +247,7 @@ start1:
 		pop bx
 		pop cx
 		ret
-	xor_file endp
+	xorFile endp
 
 
 	;xoruje bufor z kluczem, wynik jest w buforze
@@ -310,6 +315,26 @@ start1:
 		pop dx
 		ret
 	saveBufferToFile endp
+
+
+	;zamyka pliki
+	closeFiles proc
+		push ax
+		push bx
+
+		mov ah, 3eh
+		mov bx, ds:[file_in_desc]
+		int 21h
+
+		mov ah, 3eh
+		mov bx, ds:[file_out_desc]
+		int 21h
+
+		pop bx
+		pop ax
+		ret
+	closeFiles endp
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	;przesuwamy si, az napotkamy nie-spacje
 	skipSpaces proc
@@ -404,8 +429,6 @@ start1:
 		
 		;DOS 2+ - EXIT - TERMINATE WITH RETURN CODE
 		mov al, 1		;kod bledy/wyjscia
-		mov	ah, 4ch  	;zakoncz program i wroc do systemu
-		int	21h
 
 	programExit:
 		;DOS 2+ - EXIT - TERMINATE WITH RETURN CODE
