@@ -7,7 +7,7 @@ data1 segment
 	key				db	80h		dup(0) ;127 bajtow + 1 na zero
 	file_in_desc	dw 			?
 	file_out_desc	dw			?
-	buffer			db	100h	dup(0) ; 256 bajtow
+	buffer			db	100h	dup(0) 	;256 bajtow
 
 
 	str_emptyArguments		db		"Uzycie: prog.exe plik_we plik_wy klucz_szyfr",10,13,"$"
@@ -18,6 +18,7 @@ data1 segment
 	str_fileCreateNew		db		"Tworze nowy plik wyjsciowy...",10,13,"$"
 	str_fileOverwrite		db		"Czy napewno nadpisac plik wyjsciowy? [T/N]: $"
 	str_fileReadError		db		"Blad podczas czytania pliku wejsciowego",10,13,"$"
+	str_fileWriteError		db		"Blad podczas zapisywania pliku wyjsciowego",10,13,"$"
 
 data1 ends
 
@@ -36,7 +37,7 @@ start1:
 	call readArgs
 	call openFiles
 	call xor_file
-
+	;pozamykac pliki
 
 
 	jmp programExit
@@ -113,7 +114,7 @@ start1:
 
 		call skipSpaces
 		loop_copy:
-			mov al, es:[si] 
+			mov al, es:[si] 	;wyciag kolejny znak argumentow
 			cmp al, 0dh			;dane sie skonczyly na pierwszym argumencie = blad
 			je copyNext
 
@@ -207,37 +208,108 @@ start1:
 		ret
 	openFiles endp
 
-
+	;wczytuje porcjami dane z pliku, xoruje je i zapisuje w nowym pliku
 	xor_file proc
 		push cx
 		push bx
 		push ax
-
+		push dx
+		
 		loop_loadData:
 			;DOS 2+ - READ - READ FROM FILE OR DEVICE
-			mov dx, offset buffer
+			mov dx, offset buffer		;do tego bedzie czytany plik
 			mov cx, 100h
 			mov bx, ds:[file_in_desc]
 			mov ah, 3fh
-			int 21h					;do ax wklada ilosc wczytanych bajtow
+			int 21h					;ax przechowuje ile znakow wczytano
 
 			jc fileReadingError		;blad podczas czytania
 
 			cmp ax, 0				;czy dane sie skonczyly?
 			je readingEnd
 
-			mov dx, offset buffer
-			call putStr
+			call xorBuffer
+			call saveBufferToFile
 
-
+			cmp ax, 100h			;czy liczba wczytanych danych jest mniejsza niz calkowity rozmiar bufora?
+			jl readingEnd			;tak, konczymy czytanie
+			jmp loop_loadData		;nie, czytamy dalej
 
 		readingEnd:
 
+		pop dx
 		pop ax
 		pop bx
 		pop cx
+		ret
 	xor_file endp
 
+
+	;xoruje bufor z kluczem, wynik jest w buforze
+	xorBuffer proc
+		push si
+		push di
+		push ax
+		push bx
+		push cx
+		
+		;ax przechowuje ile znakow wczytano
+		mov di, offset buffer	;tym bede sie poruszal po buforze
+		mov si, offset key		;tym bede sie poruszal po kluczu
+		mov cx, ax				;licznik ile bajtow pozostalo do wczytania
+
+		loop_xor:
+			cmp cx, 0
+			je endXoring
+
+			mov al, byte ptr ds:[di]	;chcemy tylko jeden bajt
+			xor al, byte ptr ds:[si]	;wynik bedzie w al
+			mov byte ptr ds:[di], al	;aktualizujemy bufor
+
+			dec cx
+			inc di
+			inc si
+
+			mov al, byte ptr ds:[si]
+			cmp al, 0 					;napotykamy zero w kluczu, czyli klucz sie skonczyl, wiec musimy przewinac go na poczatek
+			jne loop_xor
+
+			mov si, offset key
+
+			jmp loop_xor
+
+		endXoring:
+		pop si
+		pop di
+		pop ax
+		pop bx
+		pop cx
+		ret
+	xorBuffer endp
+
+
+	;zapisuje dane z bufora do pliku wyjsciowego
+	saveBufferToFile proc
+		push dx
+		push ax
+		push bx
+		push cx
+
+		;ax przechowuje ile znakow wczytano
+		mov cx, ax
+		mov ah, 40h
+		mov bx, ds:[file_out_desc]
+		mov dx, offset buffer
+		int 21h
+
+		jc fileSavingError		;jestli CF = blad
+
+		pop cx
+		pop bx
+		pop ax
+		pop dx
+		ret
+	saveBufferToFile endp
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	;przesuwamy si, az napotkamy nie-spacje
 	skipSpaces proc
@@ -301,6 +373,12 @@ start1:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	fileReadingError:
 		mov dx, offset str_fileReadError
+		call putStr
+
+		call programExitError
+
+	fileSavingError:
+		mov dx, offset str_fileWriteError
 		call putStr
 
 		call programExitError
