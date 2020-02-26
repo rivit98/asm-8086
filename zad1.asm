@@ -20,7 +20,6 @@ data1 segment
 	str_fileReadError		db		"Blad podczas czytania pliku wejsciowego",10,13,"$"
 	str_fileWriteError		db		"Blad podczas zapisywania pliku wyjsciowego",10,13,"$"
 	str_success				db		"Plik zaszyfrowany pomyslnie!",10,13,"$"
-
 data1 ends
 
 code1 segment
@@ -34,7 +33,6 @@ start1:
 	mov ax, seg data1
 	mov ds, ax
 
-	;wczytanie parametrow
 	call readArgs
 	call openFiles
 	call xorFile
@@ -118,8 +116,8 @@ start1:
 		call skipSpaces
 		loop_copy:
 			mov al, es:[si] 	;wyciag kolejny znak argumentow
-			cmp al, 0dh			;dane sie skonczyly na pierwszym argumencie = blad
-			je copyNext
+			cmp al, 0dh			;dane sie skonczyly
+			je exitLoop
 
 			cmp al, '"'			;pomijamy cudzyslow
 			je skipQuote
@@ -131,7 +129,7 @@ start1:
 
 			jmp loop_copy
 
-		copyNext:
+		exitLoop:
 		pop ax
 		ret
 	parseLastArg endp
@@ -436,7 +434,7 @@ code1 ends
 
 stack1 segment stack
 
-	dw 300 dup(?)
+	dw 100h dup(?)
 topstack	dw ?
 
 stack1 ends

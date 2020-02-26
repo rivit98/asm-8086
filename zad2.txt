@@ -1,0 +1,6 @@
+Program 2
+Opis:
+Proszę napisać program, którego parametrami przy uruchamianiu będą cyfra reprezentująca ZOOM oraz dowolny krótki tekst. Po naciśnięciu klawisza ENTER, program powinien wyświetlić na ekranie w trybie graficznym VGA (320x200, 256 kol) podany wcześniej w linii komend tekst powiększony ZOOM razy, wykorzystując do tego wyłącznie bezpośredni dostęp do pamięci obrazu. Do tworzenia obrazu nie wolno wykorzystywać gotowych funkcji DOS oraz BIOS. Program powinien pozwolić na powrót do systemu operacyjnego po naciśnięciu dowolnego klawisza.
+
+Przykład wywołania programu:
+     program 8 To jest tekst!   
