@@ -122,9 +122,9 @@ start1:
 			je skipQuote
 			
 			mov ds:[di], al
+			inc di
 			skipQuote:
 				inc si
-				inc di
 
 			jmp loop_copy
 
