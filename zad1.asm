@@ -1,9 +1,13 @@
+;  Albert Gierlach
+;  Asembler, szyfrowanie plikow (XOR)
+
 data1 segment
-	file_in			db 	65		dup(0)
-	file_out 		db 	65 		dup(0)
-	key				db	255		dup(0)
+	file_in			db 	80h		dup(0) ;127 bajtow + 1 na zero
+	file_out 		db 	80h 	dup(0) ;127 bajtow + 1 na zero
+	key				db	80h		dup(0) ;127 bajtow + 1 na zero
 	file_in_desc	dw 			?
 	file_out_desc	dw			?
+	buffer			db	100h	dup(0) ; 256 bajtow
 
 
 	str_emptyArguments		db		"Uzycie: prog.exe plik_we plik_wy klucz_szyfr",10,13,"$"
@@ -12,6 +16,8 @@ data1 segment
 	str_fileOpenErrorIn		db		"Blad otwierania pliku wejsciowego!",10,13,"$"
 	str_fileOpenErrorOut	db		"Blad otwierania pliku wyjsciowego!",10,13,"$"
 	str_fileCreateNew		db		"Tworze nowy plik wyjsciowy...",10,13,"$"
+	str_fileOverwrite		db		"Czy napewno nadpisac plik wyjsciowy? [T/N]: $"
+	str_fileReadError		db		"Blad podczas czytania pliku wejsciowego",10,13,"$"
 
 data1 ends
 
@@ -29,7 +35,7 @@ start1:
 	;wczytanie parametrow
 	call readArgs
 	call openFiles
-
+	call xor_file
 
 
 
@@ -64,7 +70,7 @@ start1:
 			mov al, 0				;asci zero terminated string
 			mov ds:[di], al
 
-			mov di, offset key
+			mov di, offset key		;wskaznik na poczatek - odtad bedzie zapis klucza
 			call parseLastArg
 			mov al, 0				;asci zero terminated string
 			mov ds:[di], al
@@ -111,8 +117,8 @@ start1:
 			cmp al, 0dh			;dane sie skonczyly na pierwszym argumencie = blad
 			je copyNext
 
-			cmp al, '"'			;spacja = skaczemy do nastepnego argumentu
-			je skipQuote			;gdy argumenty sa poprawne, to tutaj powinna sie skonczyc petla
+			cmp al, '"'			;pomijamy cudzyslow
+			je skipQuote
 			
 			mov ds:[di], al
 			skipQuote:
@@ -126,10 +132,12 @@ start1:
 		ret
 	parseLastArg endp
 
-	;otwiera plik wejsciowy, zapisuje deskryptor
+
+	;otwiera plik wejsciowy i wyjsciowy, zapisuje deskryptory
 	openFiles proc
 		push ax
 		push dx
+		push cx
 
 		;DOS 2+ - OPEN - OPEN EXISTING FILE
 		mov dx, offset file_in
@@ -137,7 +145,7 @@ start1:
 		mov	ah, 3dh
 		int 21h				;w CF bledy
 
-		jc fileOpenError	;jump if carry (CF)
+		jc fileOpenError	;jump if carry (CF), CF ustawione gdy blad
 
 		mov word ptr ds:[file_in_desc], ax
 
@@ -148,10 +156,29 @@ start1:
 		int 21h				;w CF bledy
 
 		jc fileOpenErrorOut	;jump if carry (CF)
-		mov word ptr ds:[file_out_desc], ax
 
+		mov dx, offset str_fileOverwrite
+		call putStr
 
-		jmp openingFinished
+		mov dx, ax			;deskryptor pliku daje do dx, zeby ponizsze przerwanie nie nadpisalo
+
+		;DOS 1+ - READ CHARACTER FROM STANDARD INPUT, WITH ECHO
+		mov ah, 01h
+		int 21h
+
+		call putNewLine
+
+		cmp al, 't'
+		je saveFileDescriptor
+
+		cmp al, 'T'
+		je saveFileDescriptor
+
+		jmp fileOpenError
+
+		saveFileDescriptor:
+			mov word ptr ds:[file_out_desc], dx
+			jmp openingFinished
 
 		fileOpenErrorOut:
 			mov dx, offset str_fileOpenErrorOut
@@ -160,16 +187,56 @@ start1:
 			mov dx, offset str_fileCreateNew
 			call putStr
 
-			; create new file
+			;DOS 2+ - CREAT - CREATE OR TRUNCATE FILE
+			mov dx, offset file_out
+			mov ah, 3ch
+			mov cx, 0
+			int 21h
 
+			jc fileOpenError
 
+			mov dx, ax
+			jmp saveFileDescriptor
 
 		openingFinished:
+			
 
+		pop cx
 		pop dx
 		pop ax
 		ret
 	openFiles endp
+
+
+	xor_file proc
+		push cx
+		push bx
+		push ax
+
+		loop_loadData:
+			;DOS 2+ - READ - READ FROM FILE OR DEVICE
+			mov dx, offset buffer
+			mov cx, 100h
+			mov bx, ds:[file_in_desc]
+			mov ah, 3fh
+			int 21h					;do ax wklada ilosc wczytanych bajtow
+
+			jc fileReadingError		;blad podczas czytania
+
+			cmp ax, 0				;czy dane sie skonczyly?
+			je readingEnd
+
+			mov dx, offset buffer
+			call putStr
+
+
+
+		readingEnd:
+
+		pop ax
+		pop bx
+		pop cx
+	xor_file endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	;przesuwamy si, az napotkamy nie-spacje
@@ -187,6 +254,21 @@ start1:
 			pop		 ax
 			ret
 	skipSpaces endp
+
+
+	;wypisz nowa linie
+	putNewLine proc
+		push dx
+
+		mov dl, 10
+		call putChar
+
+		mov dl, 13
+		call putChar
+
+		pop dx
+		ret
+	putNewLine endp
 
 
 	;wypisz dl na stdout (jeden znak)
@@ -217,6 +299,12 @@ start1:
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	fileReadingError:
+		mov dx, offset str_fileReadError
+		call putStr
+
+		call programExitError
+
 	argumentError:
 		mov dx, offset str_argumentsError
 		call putStr
