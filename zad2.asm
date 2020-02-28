@@ -148,7 +148,7 @@ start1:
 	parseLastArg endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
+	;rysuje text znak po znaku
 	displayText proc
 		push ax
 		push cx
@@ -167,8 +167,8 @@ start1:
 
 			dec ch
 			jmp loop_centering
-
 		loop_centering_exit:
+
 
 		xor di, di
 		mov di, 140h * 064h		;centruje tekst 320 * 100
@@ -189,8 +189,8 @@ start1:
 			inc si
 
 			;zamiast 8 pixeli musimy sie przesunac o 8 * zoomvalue, bo znaki sa powiekszone
-			; add di, 8h
 			call increase_di
+			; add di, 8h		; (DEBUG)
 
 			jmp loop_drawLetters
 
@@ -228,6 +228,7 @@ start1:
 		ret
 	increase_di endp
 
+	;dodaje do di zoomvalue
 	indcrease_di_by_zoomvalue proc
 		push si
 		push ax
@@ -250,7 +251,7 @@ start1:
 	indcrease_di_by_zoomvalue endp
 
 
-	;procedura rysowania pojedynczego znaku, w al wymaga jaki znak rysowac, w ah wymaga zoomvalue, w di wymaga lewego gornego pixela (offset) od ktorego ma rysowac
+	;procedura rysowania pojedynczego znaku, w al wymaga jaki znak rysowac, w di wymaga lewego gornego pixela (offset) od ktorego ma rysowac
 	drawCharacter proc
 		push es
 		push ds
@@ -274,7 +275,7 @@ start1:
 		int 10h
 
 		mov ax, es		;ustawiam datasegment, tam gdzie sa czcionki
-		mov ds, ax
+		mov ds, ax		;pamietac zeby segment zmienic przy pobieraniu zoomvalue
 
 		add si, bp		;bp jest zwracane przez powyzsze przerwanie, wskazuje na pamiec gdzie zaczynaja sie dane czcionek
 						;dodajemy ta wartosc do juz wyliczonego przez nas offsetu danego znaku
@@ -311,6 +312,7 @@ start1:
 
 				drawBlackPixel:
 					mov al, 0			;czarny kolor
+					;mov al, 2			; (DEBUG)
 
 				drawPixel:
 
@@ -329,8 +331,8 @@ start1:
 				call nextRowBig			;przeskakujemy do nowego duzego wiersza... ale musimy to zrobic zoomvalue razy
 										;...ale jestesmy o 8 * zoomvalue pixeli za daleko, wiec trzeba odjac
 				
-				; add di, 320 		
-				; sub di, 8			
+				; add di, 320 			; (DEBUG)
+				; sub di, 8				; (DEBUG)
 				
 				inc si
 				dec ch
@@ -453,19 +455,6 @@ start1:
 			pop		 ax
 			ret
 	skipSpaces endp
-
-
-	;wypisz dl na stdout (jeden znak)
-	putChar proc
-		push ax
-
-		;DOS 1+ - WRITE CHARACTER TO STANDARD OUTPUT
-		mov ah, 02h
-		int 21h
-
-		pop ax
-		ret
-	putChar endp
 
 
 	;wypisz ds:dx an stdout
