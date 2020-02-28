@@ -138,7 +138,7 @@ start1:
 			je skipQuote
 
 			cmp ch, 20h-1		;overflow protection :)
-			je exitLoop			;-1 przez to ze string koncze zerem
+			jge exitLoop		;-1 przez to ze string koncze zerem
 			
 			mov ds:[di], al
 			inc ch

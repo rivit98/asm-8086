@@ -2,8 +2,8 @@
 ;  Asembler, szyfrowanie plikow (XOR)
 
 data1 segment
-	file_in			db 	80h		dup(0) ;127 bajtow + 1 na zero
-	file_out 		db 	80h 	dup(0) ;127 bajtow + 1 na zero
+	file_in			db 	40h		dup(0) ;63 bajtow + 1 na zero
+	file_out 		db 	40h 	dup(0) ;63 bajtow + 1 na zero
 	key				db	80h		dup(0) ;127 bajtow + 1 na zero
 	file_in_desc	dw 			?
 	file_out_desc	dw			?
@@ -88,22 +88,29 @@ start1:
 	;parsuje jeden argument pod adres w di, wymaga wczesniej ustawionego si
 	parseOneArg proc
 		push ax
+		push cx
 
 		call skipSpaces
+		mov ch, 0
 		loop_copy:
 			mov al, es:[si] 
 			cmp al, 0dh			;dane sie skonczyly na pierwszym argumencie = blad
 			je argumentError
+
+			cmp ch, 40h-1		;overflow protection :)	
+			jge copyNext		;-1 przez to ze string koncze zerem
 
 			cmp al, ' '			;spacja = skaczemy do nastepnego argumentu
 			je copyNext			;gdy argumenty sa poprawne, to tutaj powinna sie skonczyc petla
 			mov ds:[di], al
 			inc si
 			inc di
+			inc ch
 
 			jmp loop_copy
 
 		copyNext:
+		pop cx
 		pop ax
 		ret
 	parseOneArg endp
@@ -112,8 +119,10 @@ start1:
 	;parsuje ostatni argument, podobne do parseOneArg, ale nie sprawdza spacji
 	parseLastArg proc
 		push ax
+		push cx
 
 		call skipSpaces
+		mov ch, 0
 		loop_copy:
 			mov al, es:[si] 	;wyciag kolejny znak argumentow
 			cmp al, 0dh			;dane sie skonczyly
@@ -122,6 +131,9 @@ start1:
 			cmp al, '"'			;pomijamy cudzyslow
 			je skipQuote
 			
+			cmp ch, 80h-1		;overflow protection :)	
+			jge exitLoop		;-1 przez to ze string koncze zerem
+
 			mov ds:[di], al
 			inc di
 			skipQuote:			;jesli pomijamy jakis znak to nie zwiekszamy di
@@ -130,6 +142,7 @@ start1:
 			jmp loop_copy
 
 		exitLoop:
+		pop cx
 		pop ax
 		ret
 	parseLastArg endp
