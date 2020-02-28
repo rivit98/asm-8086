@@ -126,7 +126,9 @@ start1:
 	;parsuje ostatni argument, podobne do parseOneArg, ale nie sprawdza spacji
 	parseLastArg proc
 		push ax
+		push cx
 
+		xor ch, ch
 		loop_copy:
 			mov al, es:[si] 	;wyciag kolejny znak argumentow
 			cmp al, 0dh			;dane sie skonczyly
@@ -134,8 +136,12 @@ start1:
 
 			cmp al, '"'			;pomijamy cudzyslow
 			je skipQuote
+
+			cmp ch, 20h-1		;overflow protection :)
+			je exitLoop			;-1 przez to ze string koncze zerem
 			
 			mov ds:[di], al
+			inc ch
 			inc di
 			skipQuote:			;jesli pomijamy jakis znak to nie zwiekszamy di
 				inc si
@@ -143,6 +149,7 @@ start1:
 			jmp loop_copy
 
 		exitLoop:
+		pop cx
 		pop ax
 		ret
 	parseLastArg endp
