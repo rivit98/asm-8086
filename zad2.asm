@@ -2,10 +2,9 @@
 ;  Zoom tekstu
 
 data1 segment
-	text			db 	40h		dup(0) 	;64 bajty + 1 na zero
+	text			db 	20h		dup(0) 	;31 bajty + 1 na zero
 	zoomvalue		db 			1
-	buffer			db	100h	dup(0) 	;256 bajtow
-
+	oldVideoMode	db			?
 
 	str_emptyArguments		db		"Uzycie: prog.exe ZOOMLEVEL ""tekst""",10,13,"$"
 	str_argumentsError		db		"Podane argumenty sa niepoprawne!",10,13,"$"
@@ -25,9 +24,33 @@ start1:
 	mov ax, seg data1
 	mov ds, ax
 
-	call readArgs
-	;call switchMode
+	;zapisuje obecny tryb
+	;VIDEO - GET CURRENT VIDEO MODE
+	mov ah, 0fh
+	int 10h
+	mov ds:[oldVideoMode], al
+
+	;call readArgs
+
+	;VIDEO - SET VIDEO MODE
+	mov ah, 0h
+	mov al, 13h			;13h = G  40x25  8x8   320x200  256/256K  .   A000 VGA,MCGA,ATI VIP
+	int 10h
+
+	call drawCharacter
 	;call displayText
+
+	;czekaj na klawisz
+	;DOS 1+ - READ CHARACTER FROM STANDARD INPUT, WITH ECHO
+	mov ah, 01h
+	int 21h
+
+	;przywracam poprzedni tryb
+	;VIDEO - SET VIDEO MODE
+	mov ah, 0h
+	mov al, ds:[oldVideoMode]
+	int 10h
+
 
 	jmp programExit
 
@@ -71,12 +94,12 @@ start1:
 
 		call skipSpaces
 
-		mov al, es:[si] 
+		mov al, es:[si]		;obecny znak
 		cmp al, 0dh			;dane sie skonczyly na pierwszym argumencie = blad
 		je argumentError
 
 		;sprawdz czy wczytane napewno jest cyfra
-		cmp al, '0'
+		cmp al, '1'
 		jl zoomWrongValue
 
 		cmp al, '9'
@@ -85,7 +108,16 @@ start1:
 		;obsluzyc blad ze nie cyfra
 		sub al, '0'			;konwertuje na liczbe
 		mov ds:[zoomvalue], al
+
 		inc si
+
+		mov al, es:[si]			;wyciag kolejny znak argumentow
+		cmp al, ' '				;jesli nastepny znak po zoomie to nie spacja, to znaczy ze podano cos dluzsze niz 1 znak
+		jne argumentError
+
+		call skipSpaces
+		cmp al, 0dh				;po przewinieciu spacji zostal tylko znak 0dh, co oznacza ze nie ma drugiego argumentu
+		je argumentError
 
 		pop ax
 		ret
@@ -95,12 +127,6 @@ start1:
 	;parsuje ostatni argument, podobne do parseOneArg, ale nie sprawdza spacji
 	parseLastArg proc
 		push ax
-
-		call skipSpaces
-
-		mov al, es:[si]			;wyciag kolejny znak argumentow
-		cmp al, 0dh				;po przewinieciu spacji zostal tylko znak 0dh, co oznacza ze nie ma drugiego argumentu
-		je argumentError
 
 		loop_copy:
 			mov al, es:[si] 	;wyciag kolejny znak argumentow
@@ -122,7 +148,105 @@ start1:
 		ret
 	parseLastArg endp
 
-	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;procedura rysowania pojedynczego znaku, w al wymaga jaki znak rysowac
+	drawCharacter proc
+		push es
+		push ds
+		push ax
+		push bx
+		push cx
+		push di
+		push si
+
+		;VIDEO - GET FONT INFORMATION (EGA, MCGA, VGA)
+		;bh - 02h ROM 8x14 character font pointer
+		;bh - 03h ROM 8x8 double dot font pointer
+		mov ax, 1130h
+		mov bh, 02h
+		int 10h
+
+		mov ax, es		;ustawiam datasegment, tam gdzie siedzą czcionki
+		mov ds, ax
+
+		;tu zaczyna sie pamiec video
+		mov ax, 0a000h
+		mov es, ax
+		
+		xor si, si		;si bedzie iteratorem po 14 bajtach jednego znaku
+		add si, bp		;tu zaczynaja sie bitmapy czcionek, bp jest zwracane przez powyzsze przerwanie
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+		xor ax, ax
+		mov al, 61h		;61h a
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+		;kazdy znak zajmuje 14bajtow czyli 112bity. Kazdy zapalony bit to pixel na ekranie. Kazdy wiersz to bajt.
+		;bajty 0-13 = znak ascii o indeksie 0
+		;14-27 = index 1
+		;.... itd
+
+		mov bl, 0eh
+		mul bl				;mnoze ax razy 16, bo jeden znak zajmuje 16bajtow
+		add si, ax			;po dodaniu si trzyma pierwszy bajt rysowanego znaku
+
+		xor di, di			;iterator po pamieci video 
+		; mov di, 320
+		; mul di, 064h		;to trzeba wyliczyc
+
+		mov ch, 0eh			;14 wierszy
+		loop_row:
+			cmp ch, 0
+			je drawingFinished
+
+			mov ah,	10000000b		;maska dla kolejnych bitow
+			mov cl, 8				;8 kolumn
+			loop_column:
+				cmp cl, 0
+				je drawingColumnFinished
+
+				mov al, ds:[si]		;wyciag bajt czcionki
+				and al, ah			;sprawdzam czy dany pixel ma byc zapalony czy nie
+
+				cmp al, 0			;jesli bit niezapalony - rysuj czarny kolor
+				je drawBlackPixel
+
+				;w przeciwnym przypadku - bialy
+				mov al, 0fh			;bialy kolor
+				jmp drawPixel
+
+				drawBlackPixel:
+					mov al, 00h			;czarny kolor
+
+				drawPixel:
+					mov es:[di], al		;wpisz kolor na pamiec video
+
+					shr ah, 1h			;przesun maske w prawo (bo rysuje od lewej do prawej)
+					inc di
+					dec cl
+
+				jmp loop_column
+
+			drawingColumnFinished:
+				add di, 320 		;przeskakujemy do nowego wiersza...
+				sub di, 8			;...ale jestesmy o 8 pixeli za daleko, wiec trzeba odjac
+				inc si
+				dec ch
+			
+			jmp loop_row
+
+		drawingFinished:
+		pop si
+		pop di
+		pop cx
+		pop bx
+		pop ax
+		pop ds
+		pop es
+		ret
+	drawCharacter endp
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	;przesuwamy si, az napotkamy nie-spacje
 	skipSpaces proc
 		push ax

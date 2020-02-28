@@ -7,7 +7,7 @@ data1 segment
 	key				db	80h		dup(0) ;127 bajtow + 1 na zero
 	file_in_desc	dw 			?
 	file_out_desc	dw			?
-	buffer			db	100h	dup(0) 	;256 bajtow
+	buffer			db	200h	dup(0) 	;512 bajtow
 
 
 	str_emptyArguments		db		"Uzycie: prog.exe plik_we plik_wy ""klucz_szyfr""",10,13,"$"
@@ -216,7 +216,7 @@ start1:
 		loop_loadData:
 			;DOS 2+ - READ - READ FROM FILE OR DEVICE
 			mov dx, offset buffer		;do tego bedzie czytany plik
-			mov cx, 100h				;pojemnosc bufora
+			mov cx, 200h				;pojemnosc bufora
 			mov bx, ds:[file_in_desc]	;gdzie bedzie uchwyt do pliku
 			mov ah, 3fh
 			int 21h					;ax przechowuje ile znakow wczytano
@@ -229,7 +229,7 @@ start1:
 			call xorBuffer
 			call saveBufferToFile
 
-			cmp ax, 100h			;czy liczba wczytanych danych jest mniejsza niz calkowity rozmiar bufora?
+			cmp ax, 200h			;czy liczba wczytanych danych jest mniejsza niz calkowity rozmiar bufora?
 			jl readingEnd			;tak, konczymy czytanie
 			jmp loop_loadData		;nie, czytamy dalej
 
@@ -434,7 +434,7 @@ code1 ends
 
 stack1 segment stack
 
-	dw 100h dup(?)
+	dw 200h dup(?)
 topstack	dw ?
 
 stack1 ends
