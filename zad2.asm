@@ -296,6 +296,7 @@ start1:
 
 			mov bh,	10000000b		;maska dla kolejnych bitow
 			mov cl, 8				;8 kolumn
+			; mov cl, 7				;fajny efekt jak sie utnie jedna kolumne :)
 			loop_column:
 				cmp cl, 0
 				je drawingColumnFinished
@@ -316,8 +317,8 @@ start1:
 
 				drawPixel:
 
-					; mov es:[di], al		;rysuj pixel
-					; inc di
+					; mov es:[di], al		; (DEBUG)
+					; inc di				; (DEBUG)
 
 					call drawSquares
 					call indcrease_di_by_zoomvalue
@@ -390,7 +391,7 @@ start1:
 	nextRowBig endp
 
 
-	;rysuje duzy pixel zoomvalue x zoomvalue, wymaga w al koloru, di wskazuje na lewy gorny rog kwadratu
+	;rysuje duzy kwadrat o wymiarach zoomvalue x zoomvalue, wymaga w al koloru, di ma wskazywac na lewy gorny rog kwadratu
 	drawSquares proc
 		push di
 		push si
