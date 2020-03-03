@@ -1,16 +1,19 @@
 ;  Albert Gierlach
-;  Zoom tekstu
+;  Zoom tekstu + przewijanie
 
 data1 segment
-	text			db 	20h		dup(0) 	;31 bajty + 1 na zero
+	text			db 	40h		dup(0) 	;63 bajty + 1 na zero
+	textLen			db			0		;dlugosc tekstu
 	zoomvalue		db 			1
 	oldVideoMode	db			?
+	drawOffset		db			0		;od ktorego znaku zaczac rysowanie, uzywane przy przewijaniu
 
 	str_emptyArguments		db		"Uzycie: prog.exe zoomvalue ""tekst""",10,13,"$"
 	str_argumentsError		db		"Podane argumenty sa niepoprawne!",10,13,"$"
 	str_exitError			db		"Program zakonczyl sie bledem :(",10,13,"$"
 	str_success				db		"Plik zaszyfrowany pomyslnie!",10,13,"$"
 	str_zoomWrongValue		db		"Zoom musi byc z przedzialu [1,9]",10,13,"$"
+
 data1 ends
 
 code1 segment
@@ -37,12 +40,64 @@ start1:
 	mov al, 13h			;13h = G  40x25  8x8   320x200  256/256K  .   A000 VGA,MCGA,ATI VIP
 	int 10h
 
+
 	call displayText
+
+	loop_zoom:
+		;KEYBOARD - GET KEYSTROKE
+		;AH = BIOS scan code
+		mov ah, 0
+		int 16h
+
+		cmp ah, 04Bh	;strzalka w lewo
+		je right		;czyli przewin w prawo
+
+		cmp ah, 04Dh	;strzalka w prawo
+		je left			;czyli przewin w lewo
+
+		jmp exitScrollLoop
+
+	left:
+		mov si, offset drawOffset
+		mov al, ds:[si]
+		cmp	al, 0
+		jle ignoreLeft
+
+		sub al, 1
+		; sub al, 2		;jak szybko przewijac
+		mov ds:[si], al
+		call clearScreen
+		call displayText
+
+		ignoreLeft:
+			jmp loop_zoom
+
+	right:
+		mov si, offset drawOffset
+		mov al, ds:[si]
+
+		mov di, offset textLen
+		mov ah, ds:[di]
+		sub ah, 1			;odejmuje jeden zeby sie nie dalo calkiem zniknac tekstu, tak to zawsze bedzie jeden znak widoczny
+
+		cmp	al, ah
+		jge ignoreRight
+
+		add al, 1
+		; add al, 2		;jak szybko przewijac
+		mov ds:[si], al
+		call clearScreen
+		call displayText
+
+		ignoreRight:
+			jmp loop_zoom
+
+	exitScrollLoop:
 
 	;czekaj na klawisz
 	;DOS 1+ - READ CHARACTER FROM STANDARD INPUT, WITH ECHO
-	mov ah, 01h
-	int 21h
+	; mov ah, 01h
+	; int 21h
 
 	;przywracam poprzedni tryb
 	;VIDEO - SET VIDEO MODE
@@ -79,6 +134,14 @@ start1:
 			call parseLastArg
 			mov al, 0				;dodaje zero na koniec stringa
 			mov ds:[di], al
+
+			;pobierz dlugosc tekstow, po prostu odjac rejestry indeksowe
+			mov si, offset text
+			sub di, si
+			mov ax, di
+			xor ah, ah
+			mov si, offset textLen
+			mov ds:[si], al
 
 		pop di
 		pop si
@@ -137,7 +200,7 @@ start1:
 			cmp al, '"'			;pomijamy cudzyslow
 			je skipQuote
 
-			cmp ch, 20h-1		;overflow protection :)
+			cmp ch, 40h-1		;overflow protection :)
 			jge exitLoop		;-1 przez to ze string koncze zerem
 			
 			mov ds:[di], al
@@ -155,9 +218,34 @@ start1:
 	parseLastArg endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	clearScreen proc
+		push ax
+		push dx
+		push bx
+		push cx
+
+		;VIDEO - SCROLL UP WINDOW
+		;AL = number of lines by which to scroll up (00h = clear entire window)
+		mov ah, 06h
+		mov al, 0h
+		mov bh,	0h		;kolor, czarny
+		mov cx, 0h    	;poczatkowe koordynaty, gorny lewy rog
+		mov dh, 24		;numer wiersza
+		mov dl, 79		;numer kolumny, poniewaz to rysuje jakby prostokat, wiec trzeba podac dwa punkty
+		int 10h
+
+		pop cx
+		pop bx
+		pop dx
+		pop ax
+
+	clearScreen endp
+
+
 	;rysuje text znak po znaku
 	displayText proc
 		push ax
+		push bx
 		push cx
 		push di
 		push si
@@ -178,14 +266,28 @@ start1:
 
 
 		xor di, di
-		mov di, 140h * 064h		;centruje tekst 320 * 100
+		mov di, 320 * 100		;centruje tekst 320 * 100
 		;skoro czcionka jest wysoka na 14 to zanim zaczne rysowac musze odjac 7 * zoomvalue wierszy. czyli 7 * 320 * zoomvalue pixeli
-		sub di, ax				;ax wyliczone wczesniej
-		add di, 010h			;odsun troche tekst od lewej krawedzi, np o 16 pixeli
+		sub di, ax				;ax wyliczone wczesniej, czyli ile pixeli odjac zeby przeskoczyc wyzej
+		mov bx, di				;to bedzie uzyte do detekcji czy tekst sie jeszcze miesci czy nie
+		add bx, 320				;przeskakuje odrazu do nowego wiersza, jesli di bedzie wieksze niz to (bx) to konczymy rysowac
+		add di, 10h				;odsun troche tekst od lewej krawedzi, np o 16 pixeli
+
+
+		;obsluga przewijania, po prostu zaczynamy od ktorejs litery
+		mov si, offset drawOffset
+		xor ax, ax
+		mov al, ds:[si]
 
 
 		mov si, offset text
+		add si, ax
 		loop_drawLetters:
+			;obsluga przewijania - jesli brakuje miejsca to nie rysujemy dalej
+			call checkIfCanDrawChar
+			cmp al, 0
+			jne drawingTextFinished
+
 			mov	al, ds:[si]		;znak tekstu
 
 			cmp al, 0			;tekst sie skonczyl
@@ -206,9 +308,27 @@ start1:
 		pop si
 		pop di
 		pop cx
+		pop bx
 		pop ax
 		ret
 	displayText endp
+
+
+	;sprawdza czy mozna rysowac nowy znak (czy sie zmiesci w linii), zwraca w al 0 jesli mozna
+	checkIfCanDrawChar proc
+		push di
+
+		mov al, 1
+		call increase_di
+		cmp di, bx
+		jge notAllowed
+		mov al, 0
+
+		notAllowed:
+
+		pop di
+		ret
+	checkIfCanDrawChar endp
 
 
 	;dodaje do di wartosc 8 * zoomvalue
@@ -234,6 +354,7 @@ start1:
 		pop si
 		ret
 	increase_di endp
+
 
 	;dodaje do di zoomvalue
 	indcrease_di_by_zoomvalue proc
@@ -303,7 +424,6 @@ start1:
 
 			mov bh,	10000000b		;maska dla kolejnych bitow
 			mov cl, 8				;8 kolumn
-			; mov cl, 7				;fajny efekt jak sie utnie jedna kolumne :)
 			loop_column:
 				cmp cl, 0
 				je drawingColumnFinished
@@ -311,27 +431,22 @@ start1:
 				mov al, ds:[si]		;wyciag bajt czcionki
 				and al, bh			;sprawdzam czy dany pixel ma byc zapalony czy nie
 
-				cmp al, 0			;jesli bit niezapalony - rysuj czarny kolor
-				je drawBlackPixel
+				cmp al, 0			;jesli bit niezapalony
+				je skipDrawing		;nie rysuj bo tlo i tak bedzie czarne, a szkoda czasu na rysowanie czarnych kwadratow
 
 				;w przeciwnym przypadku - bialy
 				mov al, 0fh			;bialy kolor
-				jmp drawPixel
 
-				drawBlackPixel:
-					mov al, 0			;czarny kolor
-					;mov al, 2			; (DEBUG)
+				; mov es:[di], al		; (DEBUG)
+				; inc di				; (DEBUG)
 
-				drawPixel:
+				call drawSquare
 
-					; mov es:[di], al		; (DEBUG)
-					; inc di				; (DEBUG)
-
-					call drawSquares
+				skipDrawing:
 					call indcrease_di_by_zoomvalue
 
-					shr bh, 1			;przesun maske w prawo (bo rysuje od lewej do prawej)
-					dec cl
+				shr bh, 1			;przesun maske w prawo (bo rysuje od lewej do prawej)
+				dec cl
 
 				jmp loop_column
 
@@ -399,7 +514,7 @@ start1:
 
 
 	;rysuje duzy kwadrat o wymiarach zoomvalue x zoomvalue, wymaga w al koloru, di ma wskazywac na lewy gorny rog kwadratu
-	drawSquares proc
+	drawSquare proc
 		push di
 		push si
 		push cx
@@ -445,7 +560,7 @@ start1:
 		pop si
 		pop di
 		ret
-	drawSquares endp
+	drawSquare endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	;przesuwamy si, az napotkamy nie-spacje
