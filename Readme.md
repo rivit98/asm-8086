@@ -7,7 +7,7 @@
 - [Project 1 solution](#project-1-solution)
 - [Project 2](#project-2)
 - [Project 2 solution](#project-2-solution)
-- [Compiling](#compiling)
+- [Compilation](#compilation)
 - [Pascal](#pascal)
 
 ## Schema
@@ -15,72 +15,71 @@
 
 ## Used software
 - ml.exe - Microsoft Macro Assembler Version 6.11
-- link.exe - linker
-- ml.err - list of errors - required by the compiler
-- Visual studio code
+- Visual studio code with 'x86 and x86_64 Assembly' extension
 - DOSBox 0.74-3
-- emu8086 (!! it doesn't support vga fonts, see task2)
+- emu8086 (!! it doesn't store vga fonts in memory (required in task2) !!)
 
 ## Project 1
 
-**Opis:**\
-Proszę napisać program szyfrujący plik w oparciu o funkcję XOR i hasło wieloznakowe. Wynikiem działania programu powinna być zaszyfrowana kopia pliku wejściowego.
-Zakładając, że zawartością pliku wejściowego jest np. tekst:
-
+**Description:**\
+Please write a file encryption program based on the XOR function and a multi-character password. The result of the program should be an encrypted copy of the input file.
+Assuming that the content of the input file is e.g. text:\
 "Wszyscy wiedzą, że czegoś nie da się zrobić, aż znajdzie się taki jeden, który nie wie, że się nie da, i on to robi."\
-a hasłem jest np.:\
+and the password is:\
 "Albert Einstein "
 
-to wówczas szyfrowanie powinno wyglądać następująco:\
+then the encryption should look like this (xoring letter by letter):\
 Wszyscy wiedzą, że czegoś nie da się zrobić, aż (…)\
-       XOR\
-Albert Einstein Albert Einstein Albert Einstein (…)
+&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;XOR\
+Albert Einstein Albert Einstein Albert Einstein (…)\
 
-Zatem hasło powtarzamy tutaj cyklicznie.
-Czyli:
 'W' xor 'A'\
 's' xor 'l'\
 'z' xor 'b'\
 'y' xor 'e'\
 's' xor 'r'\
 'c' xor 't'\
-'y' xor ' '  (czyli: y xor spacja )\
+'y' xor ' '\
 ' ' xor 'E'\
-'w' xor 'i'
+'w' xor 'i'\
+etc...
 
-itd...
 
+Encryption is symmetrical, so the file should be able to be decrypted with the same password.\
+An example of calling the program:\
+```program.exe file_in file_out "encryption key"```
 
-Szyfrowanie jest symetryczne, więc tym samym hasłem plik powinien móc być odszyfrowany.\
-Przykład wywołania programu:\
-```program.exe  plik_wej  plik_wyj  "klucz do szyfrowania tekstu"```
-
-Po uruchomieniu, program powinien wypisać na ekranie wczytane dane, a na końcu powinien wypisać komunikat że proces zakończył się poprawnie lub z błędem.
 
 ## Project 1 solution 
 [Click to show code](./task1.asm)
 
 ## Project 2
 
-**Opis:**\
-Proszę napisać program, którego parametrami przy uruchamianiu będą cyfra reprezentująca ZOOM oraz dowolny krótki tekst. Po naciśnięciu klawisza ENTER, program powinien wyświetlić na ekranie w trybie graficznym VGA (320x200, 256 kol) podany wcześniej w linii komend tekst powiększony ZOOM razy, wykorzystując do tego wyłącznie bezpośredni dostęp do pamięci obrazu. Do tworzenia obrazu nie wolno wykorzystywać gotowych funkcji DOS oraz BIOS. Program powinien pozwolić na powrót do systemu operacyjnego po naciśnięciu dowolnego klawisza.
+**Description:**\
+Please write a program whose parameters at startup will be the number representing ZOOM and any short text. After pressing ENTER, the program should display on the screen in VGA graphic mode (320x200, 256 colors) the text given earlier in the command line enlarged ZOOM times, using only direct access to the image memory. You can not use DOS and BIOS functions to create an image. The program should allow to return to the operating system by pressing any key.
 
  
 
-Przykład wywołania programu:\
-```program.exe 8 "To jest tekst!"```
+An example of calling the program:\
+```program.exe 8 "This is the text! 123"```
 
-Efekt może wyglądać np. tak:\
-![Przykladowa realizacja](./media/image002.jpg)
+The effect may look like this:\
+![Example implementation](./media/image002.jpg)
 
 ## Project 2 solution
-I've added ability to scroll text with arrows (left and right)\
+I added the ability to scroll text with arrows (left and right)\
 [Click to show code](./task2.asm)
 
-## Compiling
+![My solution 2](./media/clip.gif)
 
-Run "ml.exe file.asm" under DOS (I've used DOSBox 0.74-3)
+
+## Compilation
+
+Run &nbsp;
+```ml.exe file.asm```
+&nbsp;&nbsp;under DOS (I've used DOSBox 0.74-3)
 
 ## Pascal
 Pascal program was created to figure out how fonts are stored in memory. Code was found on [stackoverflow.com](http://stackoverlow.com). Compile with dos version of turbo pascal 7.x or use PASCAL.EXE :wink:\
-[Click to show code](./pascalFontDrawer.pas)
+[Click to show code](./pascalFontDrawer.pas)\
+![Przykladowa realizacja](./media/pascal.gif)
