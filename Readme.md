@@ -61,7 +61,7 @@ Please write a program whose parameters at startup will be the number representi
  
 
 An example of calling the program:\
-```program.exe 8 "This is the text! 123"```
+```program.exe 8 "This is the text!"```
 
 The effect may look like this:\
 ![Example implementation](./media/image002.jpg)
