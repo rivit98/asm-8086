@@ -1,35 +1,35 @@
 ;  Albert Gierlach
-;  Asembler, szyfrowanie plikow (XOR)
+;  File encryption (XOR)
 
 data1 segment
-	file_in			db 	40h		dup(0) ;63 bajtow + 1 na zero
-	file_out 		db 	40h 	dup(0) ;63 bajtow + 1 na zero
-	key				db	80h		dup(0) ;127 bajtow + 1 na zero
+	file_in			db 	40h		dup(0) ;63 bytes + 1 for '0'
+	file_out 		db 	40h 	dup(0) ;63 bytes + 1 for '0'
+	key				db	80h		dup(0) ;127 bytes + 1 for '0'
 	file_in_desc	dw 			?
 	file_out_desc	dw			?
-	buffer			db	200h	dup(0) 	;512 bajtow
+	buffer			db	200h	dup(0) 	;512 bytes
 
 
-	str_emptyArguments		db		"Uzycie: prog.exe plik_we plik_wy ""klucz_szyfr""",10,13,"$"
-	str_argumentsError		db		"Podane argumenty sa niepoprawne!",10,13,"$"
-	str_exitError			db		"Program zakonczyl sie bledem :(",10,13,"$"
-	str_fileOpenErrorIn		db		"Blad otwierania pliku wejsciowego!",10,13,"$"
-	str_fileOpenErrorOut	db		"Blad otwierania pliku wyjsciowego!",10,13,"$"
-	str_fileCreateNew		db		"Tworze nowy plik wyjsciowy...",10,13,"$"
-	str_fileOverwrite		db		"Czy napewno nadpisac plik wyjsciowy? [T/N]: $"
-	str_fileReadError		db		"Blad podczas czytania pliku wejsciowego",10,13,"$"
-	str_fileWriteError		db		"Blad podczas zapisywania pliku wyjsciowego",10,13,"$"
-	str_success				db		"Plik zaszyfrowany pomyslnie!",10,13,"$"
+	str_emptyArguments		db		"Usage: prog.exe input_file output_file ""encryption key""",10,13,"$"
+	str_argumentsError		db		"Arguments are invalid!",10,13,"$"
+	str_exitError			db		"Program finished with error :(",10,13,"$"
+	str_fileOpenErrorIn		db		"Input file open error!",10,13,"$"
+	str_fileOpenErrorOut	db		"Output file open error!",10,13,"$"
+	str_fileCreateNew		db		"Creating new input file...",10,13,"$"
+	str_fileOverwrite		db		"Overwrite output file? [T/N]: $"
+	str_fileReadError		db		"Error during reading from input file",10,13,"$"
+	str_fileWriteError		db		"Error during writing to output file",10,13,"$"
+	str_success				db		"Encryption successful!",10,13,"$"
 data1 ends
 
 code1 segment
 start1:
-	;inicjalizacja stosu
+	;init stack
 	mov	sp, offset topstack
 	mov	ax, seg topstack
 	mov	ss, ax
 
-	;inicjalizacja seg danych
+	;init data segment
 	mov ax, seg data1
 	mov ds, ax
 
@@ -44,7 +44,7 @@ start1:
 	jmp programExit
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-	;wczytuje parametry, weryfikuje poprawnosc
+	;reads parameters, verify them
 	readArgs proc
 		push ax
 		push dx
@@ -52,29 +52,29 @@ start1:
 		push di
 
 		xor 	ax, ax
-		mov   	al, byte ptr es:[80h] 	;dlugosc linii argumentow na offsecie 80h
-		cmp		al, 0					;sprawdz czy sa jakies argumenty
+		mov   	al, byte ptr es:[80h] 	;number of characters of cmd line - offset 80h
+		cmp		al, 0					;check if any arguments exists
 		jne		parseArguments
 		mov dx, offset str_emptyArguments
 		call putStr
 		call programExitError
 
 		parseArguments:
-			mov si, 81h			;poczatek argumentow
+			mov si, 81h			;cmd line starts at 81h
 
-			mov di, offset file_in	;wskaznik na poczatek - odtad bedzie zapis nazwy
-			call parseOneArg		;wczytujemy nazwe pierwszego pliku
-			mov al, 0				;dodaje zero na koniec stringa
+			mov di, offset file_in	;point at the start of input file name bufer
+			call parseOneArg		;read the first file name
+			mov al, 0				;terminate string with 0 byte
 			mov ds:[di], al
 
-			mov di, offset file_out	;wskaznik na poczatek - odtad bedzie zapis nazwy
+			mov di, offset file_out	;point at the start of output file name bufer
 			call parseOneArg
-			mov al, 0				;dodaje zero na koniec stringa
+			mov al, 0				;terminate string with 0 byte
 			mov ds:[di], al
 
-			mov di, offset key		;wskaznik na poczatek - odtad bedzie zapis klucza
+			mov di, offset key		;point at the start of key bufer
 			call parseLastArg
-			mov al, 0				;dodaje zero na koniec stringa
+			mov al, 0				;terminate string with 0 byte
 			mov ds:[di], al
 
 		pop di
@@ -84,8 +84,7 @@ start1:
 		ret
 	readArgs endp
 
-
-	;parsuje jeden argument pod adres w di, wymaga wczesniej ustawionego si
+	;parses one argument into [di], requires set di address
 	parseOneArg proc
 		push ax
 		push cx
@@ -94,14 +93,14 @@ start1:
 		mov ch, 0
 		loop_copy:
 			mov al, es:[si] 
-			cmp al, 0dh			;dane sie skonczyly na pierwszym argumencie = blad
+			cmp al, 0dh			;if data ends here then error
 			je argumentError
 
 			cmp ch, 40h-1		;overflow protection :)	
-			jge copyNext		;-1 przez to ze string koncze zerem
+			jge copyNext		;-1 because of string termination with 0
 
-			cmp al, ' '			;spacja = skaczemy do nastepnego argumentu
-			je copyNext			;gdy argumenty sa poprawne, to tutaj powinna sie skonczyc petla
+			cmp al, ' '			;space = jump to next argument
+			je copyNext			;when the arguments are correct, the loop should end here
 			mov ds:[di], al
 			inc si
 			inc di
@@ -115,8 +114,7 @@ start1:
 		ret
 	parseOneArg endp
 
-
-	;parsuje ostatni argument, podobne do parseOneArg, ale nie sprawdza spacji
+	;parses last arg, similar to parseOneArg but accepts spaces
 	parseLastArg proc
 		push ax
 		push cx
@@ -124,19 +122,19 @@ start1:
 		call skipSpaces
 		mov ch, 0
 		loop_copy:
-			mov al, es:[si] 	;wyciag kolejny znak argumentow
-			cmp al, 0dh			;dane sie skonczyly
+			mov al, es:[si] 	;get next character from cmd line
+			cmp al, 0dh			;no more data
 			je exitLoop
 
-			cmp al, '"'			;pomijamy cudzyslow
+			cmp al, '"'			;skip quote
 			je skipQuote
 			
 			cmp ch, 80h-1		;overflow protection :)	
-			jge exitLoop		;-1 przez to ze string koncze zerem
+			jge exitLoop		;-1 because of string termination with 0
 
 			mov ds:[di], al
 			inc di
-			skipQuote:			;jesli pomijamy jakis znak to nie zwiekszamy di
+			skipQuote:			;if we skip a character we dont increase di
 				inc si
 
 			jmp loop_copy
@@ -147,8 +145,7 @@ start1:
 		ret
 	parseLastArg endp
 
-
-	;otwiera plik wejsciowy i wyjsciowy, zapisuje deskryptory
+	;opens input and output file, saves descriptors
 	openFiles proc
 		push ax
 		push dx
@@ -156,21 +153,21 @@ start1:
 
 		;DOS 2+ - OPEN - OPEN EXISTING FILE
 		mov dx, offset file_in
-		mov al, 0			;odczyt
+		mov al, 0			;read
 		mov	ah, 3dh
-		int 21h				;w CF bledy
+		int 21h				;errors if CF
 
-		jc fileOpenError	;jump if carry (CF), CF ustawione gdy blad
+		jc fileOpenError	;jump if carry (CF), CF is set when error occured
 
 		mov word ptr ds:[file_in_desc], ax
 
 		;DOS 2+ - OPEN - OPEN EXISTING FILE
 		mov dx, offset file_out
-		mov al, 1			;zapis
+		mov al, 1			;save
 		mov	ah, 3dh
-		int 21h				;w CF bledy
+		int 21h				;errors if CF
 
-		jc createNewFile	;jump if carry (CF), blad otwarcia - plik nie istnieje
+		jc createNewFile	;jump if carry (CF), open error - file does not exists
 
 		mov dx, offset str_fileOverwrite
 		call putStr
@@ -184,7 +181,13 @@ start1:
 		cmp al, 't'
 		je truncFile
 
+		cmp al, 'y'
+		je truncFile
+
 		cmp al, 'T'
+		je truncFile
+
+		cmp al, 'Y'
 		je truncFile
 
 		jmp programExitError
@@ -219,7 +222,7 @@ start1:
 		ret
 	openFiles endp
 
-	;wczytuje porcjami dane z pliku, xoruje je i zapisuje w nowym pliku
+	;read data from file piece by piece, xor it and save into output file
 	xorFile proc
 		push cx
 		push bx
@@ -228,23 +231,23 @@ start1:
 		
 		loop_loadData:
 			;DOS 2+ - READ - READ FROM FILE OR DEVICE
-			mov dx, offset buffer		;do tego bedzie czytany plik
-			mov cx, 200h				;pojemnosc bufora
-			mov bx, ds:[file_in_desc]	;gdzie bedzie uchwyt do pliku
+			mov dx, offset buffer		;buffer for data from file
+			mov cx, 200h				;sizeof buffer
+			mov bx, ds:[file_in_desc]	;file handler goes here
 			mov ah, 3fh
-			int 21h					;ax przechowuje ile znakow wczytano
+			int 21h					;ax stores how many characters have been read
 
-			jc fileReadingError		;blad podczas czytania
+			jc fileReadingError		;error during reading file
 
-			cmp ax, 0				;czy dane sie skonczyly?
+			cmp ax, 0				;end of data?
 			je readingEnd
 
 			call xorBuffer
 			call saveBufferToFile
 
-			cmp ax, 200h			;czy liczba wczytanych danych jest mniejsza niz calkowity rozmiar bufora?
-			jl readingEnd			;tak, konczymy czytanie
-			jmp loop_loadData		;nie, czytamy dalej
+			cmp ax, 200h			;is the number of loaded data less than the total buffer size?
+			jl readingEnd			;yes, finish reading
+			jmp loop_loadData		;nope, read another portion of data
 
 		readingEnd:
 
@@ -256,7 +259,7 @@ start1:
 	xorFile endp
 
 
-	;xoruje bufor z kluczem, wynik jest w buforze
+	;xors buffer with key, stores output in buffer
 	xorBuffer proc
 		push si
 		push di
@@ -264,28 +267,28 @@ start1:
 		push bx
 		push cx
 		
-		;ax przechowuje ile znakow wczytano
-		mov di, offset buffer	;bufor iterator
-		mov si, offset key		;klucz iterator
-		mov cx, ax				;licznik - ile bajtow pozostalo do wczytania
+		;ax stores how many characters have been read
+		mov di, offset buffer	;buffer iterator
+		mov si, offset key		;key iterator
+		mov cx, ax				;counter - how many bytes are left to read
 
 		loop_xor:
 			cmp cx, 0
 			je endXoring
 
-			mov al, byte ptr ds:[di]	;chcemy tylko jeden bajt
-			xor al, byte ptr ds:[si]	;xor - wynik bedzie w al
-			mov byte ptr ds:[di], al	;aktualizujemy bufor
+			mov al, byte ptr ds:[di]	;we want only one byte
+			xor al, byte ptr ds:[si]	;xor - result in al
+			mov byte ptr ds:[di], al	;update buffer
 
 			dec cx
 			inc di
 			inc si
 
 			mov al, byte ptr ds:[si]
-			cmp al, 0 					;napotykamy zero w kluczu, czyli klucz sie skonczyl, wiec musimy przewinac go na poczatek
+			cmp al, 0 					;if we reached zero in key, we need to start from the beginning of the key
 			jne loop_xor
 
-			mov si, offset key			;przewijamy klucz
+			mov si, offset key			;rewind key
 
 			jmp loop_xor
 
@@ -299,21 +302,21 @@ start1:
 	xorBuffer endp
 
 
-	;zapisuje dane z bufora do pliku wyjsciowego
+	;saves data from buffer to output file
 	saveBufferToFile proc
 		push dx
 		push ax
 		push bx
 		push cx
 
-		;ax przechowuje ile znakow wczytano
+		;ax stores how many characters have been read
 		mov cx, ax
 		mov ah, 40h
 		mov bx, ds:[file_out_desc]
 		mov dx, offset buffer
 		int 21h
 
-		jc fileSavingError		;jesli CF = blad
+		jc fileSavingError		;if CF then error
 
 		pop cx
 		pop bx
@@ -323,7 +326,7 @@ start1:
 	saveBufferToFile endp
 
 
-	;zamyka pliki
+	;closes files
 	closeFiles proc
 		push ax
 		push bx
@@ -342,7 +345,7 @@ start1:
 	closeFiles endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-	;przesuwamy si, az napotkamy nie-spacje
+	;move si until we encountered non-space character
 	skipSpaces proc
 		push ax
 
@@ -359,7 +362,7 @@ start1:
 	skipSpaces endp
 
 
-	;wypisz nowa linie
+	;print new line
 	putNewLine proc
 		push dx
 
@@ -374,7 +377,7 @@ start1:
 	putNewLine endp
 
 
-	;wypisz dl na stdout (jeden znak)
+	;print character from dl
 	putChar proc
 		push ax
 
@@ -387,7 +390,7 @@ start1:
 	putChar endp
 
 
-	;wypisz ds:dx an stdout
+	;print ds:dx
 	putStr proc
 		push ax
 
@@ -434,12 +437,14 @@ start1:
 		call putStr
 		
 		;DOS 2+ - EXIT - TERMINATE WITH RETURN CODE
-		mov al, 1		;kod bledy/wyjscia
+		mov al, 1		;exit code, error
+		mov	ah, 4ch  	;terminate program
+		int	21h
 
 	programExit:
 		;DOS 2+ - EXIT - TERMINATE WITH RETURN CODE
-		mov al, 0		;kod sukcesu
-		mov	ah, 4ch  	;zakoncz program i wroc do systemu
+		mov al, 0		;exit code, 0 means success
+		mov	ah, 4ch  	;terminate program
 		int	21h
  
 code1 ends
