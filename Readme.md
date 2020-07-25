@@ -80,6 +80,6 @@ Run &nbsp;
 &nbsp;&nbsp;under DOS (I've used DOSBox 0.74-3)
 
 ## Pascal
-Pascal program was created to figure out how fonts are stored in memory. Code was found on [stackoverflow.com](http://stackoverlow.com). Compile with dos version of turbo pascal 7.x or use PASCAL.EXE :wink:\
+Pascal program was created to figure out how fonts are stored in memory. Code was found on [stackoverflow.com](http://stackoverflow.com). Compile with dos version of turbo pascal 7.x or use PASCAL.EXE :wink:\
 [Click to show code](./pascalFontDrawer.pas)\
 ![Przykladowa realizacja](./media/pascal.gif)
